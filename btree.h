@@ -13,8 +13,6 @@
 #include <vector>
 #include <utility>
 
-#include "node.h"
-
 using FunctionPtr = void (*)();
 
 template <class T>
