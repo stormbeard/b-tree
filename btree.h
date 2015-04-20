@@ -19,6 +19,9 @@ template <class T>
 class Btree {
   public:
 
+    // Default constructor
+    Btree(unsigned int _min_degree);
+
     // Checks if the tree is obeying B-tree invariants:
     // -- All leaves are at same level.
     // -- Every node (except root) contains at least m-1 keys.
@@ -65,9 +68,6 @@ class Btree {
 
     // Number of keys in the tree.
     unsigned long long num_keys;
-
-    // Default constructor
-    Btree(unsigned int _min_degree);
 
     class Node {
       public:
