@@ -41,9 +41,9 @@ class Btree {
     // Search for a key with value k
     //
     // Returns:
-    // An ordered pair containing a reference to a node and an element number
+    // An ordered pair containing a vector of node data and an element number
     // containing the piece of data.
-    std::pair <Node&, unsigned int> search(T key);
+    std::pair <std::vector<T>, unsigned int> search(T key);
 
     // Insert a key into the tree.
     //
@@ -56,13 +56,6 @@ class Btree {
     // Returns:
     // Void.
     void remove(T key);
-
-    // Sequentially traverses all keys in the tree and applies the function
-    // pointed to by 'func'. This is mostly for debugging/testing purposes.
-    //
-    // Returns:
-    // Void.
-    void map(FunctionPtr func);
 
   private:
 
