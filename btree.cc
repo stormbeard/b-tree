@@ -89,23 +89,22 @@ Btree<T>::Node::Node(size_t _min_degree, bool _is_leaf, bool _is_root) {
 // Return the number of keys in this node.
 template <class T>
 size_t Btree<T>::Node::get_num_keys() {
-  // TODO
-  assert(false);
+  assert(keys.size() <= MAX_KEYS);
+  return keys.size();
 }
 
 // is_leaf:
-// Return whether this node is a leaf or not.
+// Return whether this node is a leaf.
 template <class T>
 bool Btree<T>::Node::is_leaf() {
-  // TODO
-  assert(false);
+  return leaf_status;
 }
 
 // is_full:
 // Whether or not this node is at max key capacity
 template <class T>
 bool Btree<T>::Node::is_full() {
-  assert(!(keys.size() > MAX_KEYS));
+  assert(keys.size() <= MAX_KEYS);
   return keys.size() == (2*degree - 1);
 }
 
@@ -113,9 +112,15 @@ bool Btree<T>::Node::is_full() {
 // Insert a key into this non-full node.
 template <class T>
 void Btree<T>::Node::vacant_insert_key(T key) {
+  // Make sure number of keys is sane for this function.
   assert(MAX_KEYS > get_num_keys());
-  // TODO
-  assert(false);
+
+  // Place the new key in such a way that maintains the order invariant.
+  for (auto it : keys) {
+    if ((it == keys.end()) || (*it > key)) {
+      keys.emplace(it, key);
+    }
+  }
   return;
 }
 
