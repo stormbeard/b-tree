@@ -9,18 +9,25 @@
 #define BTREE_H_
 
 #include <iostream>
-#include <assert>
+#include <assert.h>
 #include <vector>
 #include <utility>
 
 using FunctionPtr = void (*)();
 
+
 template <class T>
 class Btree {
+
+  // Applies to all nodes.
+  const size_t MAX_KEYS_PER_NODE = 2*degree - 1;
+  // Applies to all nodes except root node.
+  const size_t MIN_KEYS_PER_NODE = degree - 1;
+
   public:
 
     // Default constructor
-    Btree(unsigned int _min_degree);
+    Btree(size_t _min_degree);
 
     // Checks if the tree is obeying B-tree invariants:
     // -- All leaves are at same level.
@@ -37,14 +44,14 @@ class Btree {
     //
     // Returns:
     // Number of keys contained in the tree.
-    unsigned long long get_size();
+    size_t get_size();
 
     // Search for a key with value k
     //
     // Returns:
     // An ordered pair containing a vector of node data and an element number
     // containing the piece of data.
-    std::pair <std::vector<T>, unsigned int> search(T key);
+    std::pair <std::vector<T>, size_t> search(T key);
 
     // Insert a key into the tree.
     //
@@ -60,22 +67,21 @@ class Btree {
 
   private:
 
-    // Pointer to the root of this tree.
-    Node<T> *root;
-
-    // Minimum degree of the tree.
-    unsigned int degree;
-
-    // Number of keys in the tree.
-    unsigned long long num_keys;
-
+    // Internal node implementation
     class Node {
+      const size_t MAX_KEYS = 2*degree - 1;
+      const size_t MIN_KEYS = degree - 1;
+      const size_t MAX_CHILDREN = MAX_KEYS + 1;
+
       public:
+        // Default constructor
+        Node(size_t _min_degree, bool _is_leaf, bool _is_root);
+
         // Get current number of keys in this node.
         //
         // Returns:
         // Number of keys in this node.
-        unsigned int get_num_keys();
+        size_t get_num_keys();
 
         // Whether the node is a leaf or not.
         //
@@ -89,22 +95,38 @@ class Btree {
         // True if at max capacity. False otherwise.
         bool is_full();
 
+        // Inserts key into this node if it's not full.
+        //
+        // Returns:
+        // Void.
+        void vacant_insert_key(T key);
+
       private:
-        // Default constructor
-        Node(unsigned int _min_degree, bool _is_leaf);
-
-        // Current number of keys
-        unsigned int num_keys;
-
         // Whether this node is a leaf node
-        bool is_leaf;
+        bool leaf_status;
+
+        // Minimum degree of this node.
+        const size_t degree;
+
+        // Whether this node is the root node.
+        bool is_root;
 
         // The keys contained in this node.
         std::vector<T> keys;
 
         // The child pointers contained in this node.
         std::vector<Node*> children;
-    }
-}
+    };
+
+    // Pointer to the root of this tree.
+    Node *root;
+
+    // Minimum degree of the tree.
+    const size_t degree;
+
+    // Number of keys in the tree.
+    size_t num_keys;
+};
 
 #endif // BTREE_H_
+
