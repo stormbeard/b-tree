@@ -3,7 +3,7 @@
  *
  * Author: Tony Allen (cyril0allen@gmail.com)
  *
- * Purpose: Header and interface for B-tree.
+ * Purpose: B-tree header/implementation.
  **=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/
 #ifndef BTREE_H_
 #define BTREE_H_
@@ -18,6 +18,7 @@ using FunctionPtr = void (*)();
 
 template <class T>
 class Btree {
+
   // Minimum degree of the tree.
   const size_t degree;
   // Applies to all nodes.
@@ -45,7 +46,7 @@ class Btree {
     }
 
     ~Btree() {
-      //TODO
+      //TODO: free up all nodes allocated.
       assert(false);
     }
 
@@ -71,14 +72,15 @@ class Btree {
       return num_keys;
     }
 
-    // Search for a key with value k
+    // Search for a node/index containing value k.
     //
     // Returns:
-    // An ordered pair containing a vector of node data and an element number
-    // containing the piece of data.
-    std::pair <std::vector<T>, size_t> search(T key) {
-      // TODO
-      assert(false);
+    // An ordered pair holding a pointer to a vector of keys and an
+    // element number containing the piece of data.
+    // If nothing is found, a null pointer is returned with index 0.
+    std::pair <std::vector<T>*, size_t> search(T key) {
+      assert(root != NULL);
+      _search(key, root);
     }
 
     // Insert a key into the tree.
@@ -103,6 +105,7 @@ class Btree {
 
     // Internal node implementation
     class Node {
+
       // Minimum degree of this node.
       const size_t degree;
       // Max/min values for the node.
@@ -191,6 +194,36 @@ class Btree {
 
     // Number of keys in the tree.
     size_t num_keys;
+
+    // Internal method to search for a node/index containing value k.
+    //
+    // Returns:
+    // An ordered pair holding a pointer to a vector of keys and an
+    // element number containing the piece of data.
+    // If nothing is found, a null pointer is returned with index 0.
+    std::pair <std::vector<T>*, size_t> _search(T key, Node* local_root) {
+      // If we made it to a null child, the key wasn't found.
+      if (local_root == NULL) {
+        return std::make_pair(NULL, 0);
+      }
+
+      auto it = local_root->begin();
+      auto first_it = it;
+      auto last_it = local_root->end();
+      while (it != last_it) {
+        // Found it.
+        if (*it == key) {
+          return std::make_pair(local_root, std::distance(first_it, it));
+        // Need to drop a level
+        } else if (*it > key) {
+          size_t child_number = std::distance(first_it, it);
+          return search(key, local_root->children.at(child_number));
+        }
+        it++;
+      }
+      // Drop into the far-right child
+      return search(key, local_root->children.back());
+    }
 };
 
 #endif // BTREE_H_
