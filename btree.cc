@@ -11,20 +11,21 @@
 // Btree definitions
 // -----------------------------------------------------------------------------
 
-// Btree constructor
+// Btree constructor:
+// Creates an empty B-tree via creating an empty node and makes root point
+// to this empty node.
 template <class T>
 Btree<T>::Btree(size_t _min_degree) {
   // Set min degree.
   degree = _min_degree;
-  root = NULL;// TODO
+
+  // There should be 0 keys in this newly created B-tree.
   num_keys = 0;
 
-  // Allocate new node
-  // Set node to leaf
-  // Set num keys to 0
-  // TODO: write to disk
-  // Set root to the new node
+  // Create a node that is a leaf and root.
+  root = new Node(degree, true, true);
 
+  // TODO: write to disk?
 }
 
 // get_size:
