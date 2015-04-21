@@ -29,6 +29,8 @@ class Btree {
     // Default constructor
     Btree(size_t _min_degree);
 
+    ~Btree();
+
     // Checks if the tree is obeying B-tree invariants:
     // -- All leaves are at same level.
     // -- Every node (except root) contains at least m-1 keys.

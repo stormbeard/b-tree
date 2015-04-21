@@ -18,6 +18,7 @@ template <class T>
 Btree<T>::Btree(size_t _min_degree) {
   // Set min degree.
   degree = _min_degree;
+  assert(degree >= 2);
 
   // There should be 0 keys in this newly created B-tree.
   num_keys = 0;
@@ -26,6 +27,14 @@ Btree<T>::Btree(size_t _min_degree) {
   root = new Node(degree, true, true);
 
   // TODO: write to disk?
+}
+
+// Btree destructor:
+// Free all the nodes that were created.
+template <class T>
+Btree<T>::~Btree() {
+  //TODO
+  assert(false);
 }
 
 // get_size:
