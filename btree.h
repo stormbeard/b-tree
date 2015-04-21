@@ -18,18 +18,36 @@ using FunctionPtr = void (*)();
 
 template <class T>
 class Btree {
-
+  // Minimum degree of the tree.
+  const size_t degree;
   // Applies to all nodes.
-  const size_t MAX_KEYS_PER_NODE = 2*degree - 1;
+  const size_t MAX_KEYS_PER_NODE;
   // Applies to all nodes except root node.
-  const size_t MIN_KEYS_PER_NODE = degree - 1;
+  const size_t MIN_KEYS_PER_NODE;
 
   public:
 
     // Default constructor
-    Btree(size_t _min_degree);
+    Btree(const size_t _min_degree) :
+      degree(_min_degree),
+      MAX_KEYS_PER_NODE(2*degree - 1),
+      MIN_KEYS_PER_NODE(degree - 1)
+  {
+      assert(degree >= 2);
 
-    ~Btree();
+      // There should be 0 keys in this newly created B-tree.
+      num_keys = 0;
+
+      // Create a node that is a leaf and root.
+      root = new Node(degree, true, true);
+
+      // TODO: write to disk?
+    }
+
+    ~Btree() {
+      //TODO
+      assert(false);
+    }
 
     // Checks if the tree is obeying B-tree invariants:
     // -- All leaves are at same level.
@@ -40,75 +58,123 @@ class Btree {
     //
     // Returns:
     // True if balanced. False otherwise.
-    bool is_sane();
+    bool is_sane() {
+      // TODO
+      assert(false);
+    }
 
     // Number of keys contained in the tree.
     //
     // Returns:
     // Number of keys contained in the tree.
-    size_t get_size();
+    size_t get_size() {
+      return num_keys;
+    }
 
     // Search for a key with value k
     //
     // Returns:
     // An ordered pair containing a vector of node data and an element number
     // containing the piece of data.
-    std::pair <std::vector<T>, size_t> search(T key);
+    std::pair <std::vector<T>, size_t> search(T key) {
+      // TODO
+      assert(false);
+    }
 
     // Insert a key into the tree.
     //
     // Returns:
     // Void.
-    void insert(T key);
+    void insert(T key){
+      // TODO
+      assert(false);
+    }
 
     // Deletes a key from the tree.
     //
     // Returns:
     // Void.
-    void remove(T key);
+    void remove(T key){
+      // TODO
+      assert(false);
+    }
 
   private:
 
     // Internal node implementation
     class Node {
-      const size_t MAX_KEYS = 2*degree - 1;
-      const size_t MIN_KEYS = degree - 1;
-      const size_t MAX_CHILDREN = MAX_KEYS + 1;
+      // Minimum degree of this node.
+      const size_t degree;
+      // Max/min values for the node.
+      const size_t MAX_KEYS;
+      const size_t MIN_KEYS;
+      const size_t MAX_CHILDREN;
 
       public:
         // Default constructor
-        Node(size_t _min_degree, bool _is_leaf, bool _is_root);
+        Node(size_t _min_degree, bool _is_leaf, bool _is_root) :
+          degree(_min_degree),
+          MAX_KEYS(2*degree - 1),
+          MIN_KEYS(degree - 1),
+          MAX_CHILDREN(MAX_KEYS + 1)
+      {
+          // Set internal variables.
+          leaf_status = _is_leaf;
+          is_root = _is_root;
+
+          // Allocate room for keys
+          keys.reserve(MAX_KEYS);
+
+          // Allocate room for child pointers
+          children.reserve(MAX_CHILDREN);
+        }
 
         // Get current number of keys in this node.
         //
         // Returns:
         // Number of keys in this node.
-        size_t get_num_keys();
+        size_t get_num_keys(){
+          assert(keys.size() <= MAX_KEYS);
+          return keys.size();
+        }
 
         // Whether the node is a leaf or not.
         //
         // Returns:
         // True if the node is a leaf.
-        bool is_leaf();
+        bool is_leaf(){
+          return leaf_status;
+        }
 
         // Whether or not this node is at max key capacity
         //
         // Returns:
         // True if at max capacity. False otherwise.
-        bool is_full();
+        bool is_full(){
+          assert(keys.size() <= MAX_KEYS);
+          return keys.size() == (2*degree - 1);
+        }
 
         // Inserts key into this node if it's not full.
         //
         // Returns:
         // Void.
-        void vacant_insert_key(T key);
+        void vacant_insert_key(T key){
+          // Make sure number of keys is sane for this function.
+          assert(MAX_KEYS > get_num_keys());
+
+          // Place the new key in such a way that maintains the order invariant.
+          for (auto it : keys) {
+            if ((it == keys.end()) || (*it > key)) {
+              keys.emplace(it, key);
+            }
+          }
+          return;
+        }
 
       private:
         // Whether this node is a leaf node
         bool leaf_status;
-
-        // Minimum degree of this node.
-        const size_t degree;
 
         // Whether this node is the root node.
         bool is_root;
@@ -122,9 +188,6 @@ class Btree {
 
     // Pointer to the root of this tree.
     Node *root;
-
-    // Minimum degree of the tree.
-    const size_t degree;
 
     // Number of keys in the tree.
     size_t num_keys;
