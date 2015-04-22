@@ -11,13 +11,16 @@
 #include <iostream>
 #include <assert.h>
 #include <vector>
+#include <memory>
 #include <utility>
-
-using FunctionPtr = void (*)();
-
 
 template <class T>
 class Btree {
+  // Forward declarations
+  class Node;
+
+  // Typedefs
+  typedef std::shared_ptr<Node> NodePtr;
 
   // Minimum degree of the tree.
   const size_t degree;
@@ -40,7 +43,7 @@ class Btree {
       num_keys = 0;
 
       // Create a node that is a leaf and root.
-      root = new Node(degree, true, true);
+      root.reset(new Node(degree, true, true));
 
       // TODO: write to disk?
     }
@@ -78,7 +81,7 @@ class Btree {
     // An ordered pair holding a pointer to a vector of keys and an
     // element number containing the piece of data.
     // If nothing is found, a null pointer is returned with index 0.
-    std::pair <std::vector<T>*, size_t> search(T key) {
+    std::pair <NodePtr, size_t> search(T key) {
       assert(root != NULL);
       _search(key, root);
     }
@@ -105,6 +108,9 @@ class Btree {
 
     // Internal node implementation
     class Node {
+      // Typedefs
+      typedef std::vector<T> Keys;
+      typedef std::vector<NodePtr> ChildNodes;
 
       // Minimum degree of this node.
       const size_t degree;
@@ -158,12 +164,25 @@ class Btree {
           return keys.size() == (2*degree - 1);
         }
 
+      private:
+        // Whether this node is a leaf node
+        bool leaf_status;
+
+        // Whether this node is the root node.
+        bool is_root;
+
+        // The keys contained in this node.
+        Keys keys;
+
+        // The child pointers contained in this node.
+        ChildNodes children;
+
         // Inserts key into this node if it's not full.
         //
         // Returns:
         // Void.
-        void vacant_insert_key(T key){
-          // Make sure number of keys is sane for this function.
+        void _vacant_insert_key(T key){
+          // Make sure this node isn't full.
           assert(MAX_KEYS > get_num_keys());
 
           // Place the new key in such a way that maintains the order invariant.
@@ -175,22 +194,22 @@ class Btree {
           return;
         }
 
-      private:
-        // Whether this node is a leaf node
-        bool leaf_status;
-
-        // Whether this node is the root node.
-        bool is_root;
-
-        // The keys contained in this node.
-        std::vector<T> keys;
-
-        // The child pointers contained in this node.
-        std::vector<Node*> children;
+        // On a NON-FULL node, takes some index indicating a FULL child
+        // and splits the FULL child and adjusts the node to have an additional
+        // child.
+        //
+        // Returns:
+        // A std::pair of pointers to the two newly created child nodes.
+        std::pair <NodePtr, NodePtr> _vacant_split_child(size_t c_idx){
+          // Make sure this node isn't full.
+          assert(MAX_KEYS > get_num_keys());
+          // TODO
+          assert(false);
+        }
     };
 
     // Pointer to the root of this tree.
-    Node *root;
+    NodePtr root;
 
     // Number of keys in the tree.
     size_t num_keys;
@@ -198,10 +217,10 @@ class Btree {
     // Internal method to search for a node/index containing value k.
     //
     // Returns:
-    // An ordered pair holding a pointer to a vector of keys and an
+    // An ordered pair holding a pointer to a collection of keys and an
     // element number containing the piece of data.
     // If nothing is found, a null pointer is returned with index 0.
-    std::pair <std::vector<T>*, size_t> _search(T key, Node* local_root) {
+    std::pair <NodePtr, size_t> _search(T key, NodePtr local_root) {
       // If we made it to a null child, the key wasn't found.
       if (local_root == NULL) {
         return std::make_pair(NULL, 0);
