@@ -97,10 +97,20 @@ class Btree {
     //
     // Returns:
     // Void.
-    void insert(T key){
+    void insert(T key) {
       assert(root != NULL);
-      // TODO
-      assert(false);
+
+      // Make a new node to potentially be the new root.
+      NodePtr nnode(new Node(degree, false, true));
+      if (root->is_full()) {
+        root->is_root = false;
+        nnode->children.emplace_back(root);
+        root = nnode;
+        root->_vacant_split_child(0);
+        _vacant_insert(key, root);
+      } else {
+        _vacant_insert(key, root);
+      }
     }
 
     // Deletes a key from the tree.
@@ -185,11 +195,13 @@ class Btree {
         // The child pointers contained in this node.
         ChildNodes children;
 
-        // Inserts key into this node if it's not full.
+        // Inserts key into this leaf if it's not full.
         //
         // Returns:
         // The index at which the key was inserted into the node.
-        size_t _vacant_insert_key(T key, NodePtr right_child) {
+        size_t _vacant_insert_key_in_leaf(T key) {
+          // Make sure this is a leaf.
+          assert(is_leaf());
           // Make sure this node isn't full.
           assert(MAX_KEYS > get_num_keys());
 
@@ -203,7 +215,7 @@ class Btree {
               keys.emplace(it, key);
               index = std::distance(it, keys.end());
               if (!is_leaf()) {
-                children.emplace(children.begin() + index, right_child);
+                children.emplace(children.begin() + index);
               }
             // Overwrite the key if found.
             } else if (*it == key) {
@@ -237,7 +249,8 @@ class Btree {
 
           // Copy relevant keys from c1 to c2.
           for (auto it = c1->begin() + degree; it != c1->end(); ++it) {
-            c2->_vacant_insert_key(*it);
+            // Can treat this like a leaf since children are getting copied
+            c2->_vacant_insert_key_in_leaf(*it);
           }
 
           // Copy child pointers if necessary
@@ -248,7 +261,9 @@ class Btree {
           }
 
           // Insert midpoint into parent node's keys.
-          _vacant_insert_key(c1->keys.at(degree - 1), c2);
+          _vacant_insert_key_in_leaf(c1->keys.at(degree - 1));
+          children.emplace(children.begin() + c_idx + 1, c2);
+
 
           // Remove all copied keys and children from c1.
           c1->keys.resize(degree - 1);
@@ -265,6 +280,7 @@ class Btree {
           assert(c1 == children.at(c_idx));
           assert(c2 == children.at(c_idx + 1));
         }
+
     }; // End class Node
 
     // Pointer to the root of this tree.
@@ -272,6 +288,50 @@ class Btree {
 
     // Number of keys in the tree.
     size_t num_keys;
+
+    // Inserts a key into a node which is assumed to be vacant.
+    //
+    // Returns:
+    // Void.
+    void _vacant_insert(T key, NodePtr nd) {
+      // Make sure node is empty
+      assert(!nd->is_full());
+
+      // Case where this node is a vacant leaf.
+      if (nd->is_leaf()) {
+        nd->_vacant_insert_key_in_leaf(key);
+        return;
+      }
+
+      // Cycle through the keys.
+      for (auto it : nd->keys) {
+        // If key exists, overwrite it.
+        if (*it == key) {
+          *it = key;
+          return;
+        // If we just passed the right spot
+        } else if ((it == nd->keys.end()) || (*it < key)) {
+          size_t child_idx = std::distance(nd->begin(), it);
+          // TODO: disk read
+          // Check if child is full, if so split it.
+          if (nd->children.at(child_idx).is_full()) {
+            nd->_vacant_split_child(std::distance(nd->begin(), it));
+            // Check the newly added key, then insert where appropriate
+            if (*it == key) {
+              // Overwrite if identical
+              *it = key;
+              return;
+            } else if (*it > key) {
+              // Insert in the same child.
+              return _vacant_insert(key, nd->children.at(child_idx));
+            } else {
+              // Insert one child to the right.
+              return _vacant_insert(key, nd->children.at(child_idx + 1));
+            }
+          }
+        }
+      }
+    }
 
     // Internal method to find a node that would be hosting the key passed in.
     //
