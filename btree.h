@@ -161,7 +161,7 @@ class Btree {
         // True if at max capacity. False otherwise.
         bool is_full(){
           assert(keys.size() <= MAX_KEYS);
-          return keys.size() == (2*degree - 1);
+          return keys.size() == MAX_KEYS;
         }
 
       private:
@@ -180,17 +180,23 @@ class Btree {
         // Inserts key into this node if it's not full.
         //
         // Returns:
-        // Void.
-        void _vacant_insert_key(T key){
+        // The index at which the key was inserted into the node.
+        void _vacant_insert_key(T key, NodePtr right_child) {
           // Make sure this node isn't full.
           assert(MAX_KEYS > get_num_keys());
 
-          // Place the new key in such a way that maintains the order invariant.
+          // The index at which the key will be placed.
+          size_t index;
+
+          // Place the new key/child such that the order invariant is upheld.
           for (auto it : keys) {
             if ((it == keys.end()) || (*it > key)) {
               keys.emplace(it, key);
+              index = std::distance(it, keys.end());
+              children.emplace(children.begin() + index, right_child);
             }
           }
+
           return;
         }
 
@@ -199,14 +205,53 @@ class Btree {
         // child.
         //
         // Returns:
-        // A std::pair of pointers to the two newly created child nodes.
-        std::pair <NodePtr, NodePtr> _vacant_split_child(size_t c_idx){
+        // A std::pair of pointers to the two newly created child nodes. The
+        // first node in the pair is the node that was just split and the second
+        // is the newly created node.
+        std::pair <NodePtr, NodePtr> _vacant_split_child(size_t c_idx) {
           // Make sure this node isn't full.
           assert(MAX_KEYS > get_num_keys());
-          // TODO
-          assert(false);
+          // Check validity of index passed in.
+          assert(children.size() < c_idx);
+          // Make sure the child being split is actually full.
+          assert(children.at(c_idx)->is_full());
+
+          // Child being split.
+          NodePtr c1 = children.at(c_idx);
+          // Allocate new child
+          NodePtr c2(new Node(degree, true, c1->leaf_status));
+
+          // Copy relevant keys from c1 to c2.
+          for (auto it = c1->begin() + degree; it != c1->end(); ++it) {
+            c2->_vacant_insert_key(*it);
+          }
+
+          // Copy child pointers if necessary
+          if (!(c1->is_leaf())) {
+            for (auto it = c1->begin(); it < c1->begin() + degree; ++it) {
+              c2->children.emplace(*it);
+            }
+          }
+
+          // Insert midpoint into parent node's keys.
+          _vacant_insert_key(c1->keys.at(degree - 1), c2);
+
+          // Remove all copied keys and children from c1.
+          c1->keys.resize(degree - 1);
+          if (c1->is_leaf()) {
+            c1->children.resize(degree);
+          }
+
+          // Check if sizes make sense
+          assert(c1->get_num_keys() == degree - 1);
+          assert(c1->children.size() == degree);
+          assert(c2->get_num_keys() == degree - 1);
+          assert(c2->children.size() == degree);
+          // Make sure c1/c2 is in the correct spot on this node's child list.
+          assert(c1 == children.at(c_idx));
+          assert(c2 == children.at(c_idx + 1));
         }
-    };
+    }; // End class Node
 
     // Pointer to the root of this tree.
     NodePtr root;
@@ -243,7 +288,7 @@ class Btree {
       // Drop into the far-right child
       return search(key, local_root->children.back());
     }
-};
+}; // End class Btree
 
 #endif // BTREE_H_
 
