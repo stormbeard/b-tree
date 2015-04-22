@@ -81,9 +81,16 @@ class Btree {
     // An ordered pair holding a pointer to a vector of keys and an
     // element number containing the piece of data.
     // If nothing is found, a null pointer is returned with index 0.
-    std::pair <NodePtr, size_t> search(T key) {
+    std::pair<NodePtr, size_t> search(T key) {
       assert(root != NULL);
-      _search(key, root);
+
+      // Find a node that may contain the key.
+      std::pair<NodePtr, size_t> results = _find_home_node(key, root);
+      if ((results.first->keys.at(results.second)) == key){
+        return results;
+      } else {
+        return std::make_pair(NULL, 0);
+      }
     }
 
     // Insert a key into the tree.
@@ -91,6 +98,7 @@ class Btree {
     // Returns:
     // Void.
     void insert(T key){
+      assert(root != NULL);
       // TODO
       assert(false);
     }
@@ -181,7 +189,7 @@ class Btree {
         //
         // Returns:
         // The index at which the key was inserted into the node.
-        void _vacant_insert_key(T key, NodePtr right_child) {
+        size_t _vacant_insert_key(T key, NodePtr right_child) {
           // Make sure this node isn't full.
           assert(MAX_KEYS > get_num_keys());
 
@@ -190,14 +198,20 @@ class Btree {
 
           // Place the new key/child such that the order invariant is upheld.
           for (auto it : keys) {
+            // Find where to insert key if it's not found in collection
             if ((it == keys.end()) || (*it > key)) {
               keys.emplace(it, key);
               index = std::distance(it, keys.end());
-              children.emplace(children.begin() + index, right_child);
+              if (!is_leaf()) {
+                children.emplace(children.begin() + index, right_child);
+              }
+            // Overwrite the key if found.
+            } else if (*it == key) {
+              *it = key;
             }
           }
 
-          return;
+          return index;
         }
 
         // On a NON-FULL node, takes some index indicating a FULL child
@@ -259,35 +273,43 @@ class Btree {
     // Number of keys in the tree.
     size_t num_keys;
 
-    // Internal method to search for a node/index containing value k.
+    // Internal method to find a node that would be hosting the key passed in.
     //
     // Returns:
-    // An ordered pair holding a pointer to a collection of keys and an
-    // element number containing the piece of data.
-    // If nothing is found, a null pointer is returned with index 0.
-    std::pair <NodePtr, size_t> _search(T key, NodePtr local_root) {
-      // If we made it to a null child, the key wasn't found.
-      if (local_root == NULL) {
-        return std::make_pair(NULL, 0);
-      }
-
+    // A pointer to a node that would make a good insertion point.
+    NodePtr _find_home_node(T key, NodePtr local_root) {
       auto it = local_root->begin();
       auto first_it = it;
       auto last_it = local_root->end();
+
+      // Cycle through all the keys here.
       while (it != last_it) {
-        // Found it.
+        // Found the key.
         if (*it == key) {
           return std::make_pair(local_root, std::distance(first_it, it));
-        // Need to drop a level
+        // Need to drop a level. Check if it's valid before doing so.
         } else if (*it > key) {
           size_t child_number = std::distance(first_it, it);
-          return search(key, local_root->children.at(child_number));
+          if (local_root->children.at(child_number) == NULL) {
+            // Nowhere to go, this is as good as it gets.
+            return std::make_pair(local_root, 0);
+          } else {
+            // Dig deeper in the tree.
+            return search(key, local_root->children.at(child_number));
+          }
         }
         it++;
       }
-      // Drop into the far-right child
-      return search(key, local_root->children.back());
+
+      // Drop into the far-right child if it's valid.
+      if (local_root->children.back() == NULL) {
+        // Nowhere to go, this is as good as it gets.
+        return std::make_pair(local_root, 0);
+      } else {
+        return search(key, local_root->children.back());
+      }
     }
+
 }; // End class Btree
 
 #endif // BTREE_H_
