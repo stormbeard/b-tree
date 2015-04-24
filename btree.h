@@ -121,6 +121,7 @@ class Btree {
       } else {
         _vacant_insert(key, root);
       }
+      num_keys++;
     }
 
     // Deletes a key from the tree.
@@ -228,7 +229,6 @@ class Btree {
             // Find where to insert key
             if ((it == keys.end()) || (*it > key)) {
               keys.emplace(it, key);
-              tree->num_keys++;
               index = std::distance(it, keys.end());
               return index;
             // Overwrite the key if found.
