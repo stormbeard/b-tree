@@ -37,15 +37,16 @@ class Btree {
     Btree(const size_t _min_degree) :
       degree(_min_degree),
       MAX_KEYS_PER_NODE(2*degree - 1),
-      MIN_KEYS_PER_NODE(degree - 1)
+      MIN_KEYS_PER_NODE(degree - 1),
+      MIN_KEYS_FOR_RM(degree)
     {
       assert(degree >= 2);
 
       // There should be 0 keys in this newly created B-tree.
       num_keys = 0;
 
-      // Create a node that is a leaf and root.
-      root.reset(new Node(this, true, true));
+      // Create a node that is a leaf and assign to root.
+      root.reset(new Node(this, true));
 
       // TODO: write to disk?
     }
@@ -103,21 +104,20 @@ class Btree {
       // Check if root is null
       assert(root != NULL);
       // Check number of keys is sane
-      assert(root->keys.size() <= MAX_KEYS_PER_NODE);
+      assert(root->get_num_keys() <= MAX_KEYS_PER_NODE);
       // Check number of children makes sense with number of keys
       assert((root->is_leaf()) ||
-             (root->children.size() - 1 == root->keys.size()));
+             (root->children.size() - 1 == root->get_num_keys()));
 
       if (root->is_full()) {
         // Make a new node to potentially be the new root.
-        NodePtr nnode(new Node(this, false, true));
-        root->is_root = false;
+        NodePtr nnode(new Node(this, false));
         nnode->children.emplace_back(root);
         root = nnode;
         // The new root should have a single child
         assert(root->children.size() == 1);
         root->_vacant_split_child(0);
-        _vacant_insert(key, nnode); // wat
+        _vacant_insert(key, nnode);
       } else {
         _vacant_insert(key, root);
       }
@@ -129,11 +129,19 @@ class Btree {
     // Returns:
     // Void.
     void remove(T key){
-      // TODO
-      assert(false);
+      // Call recursive removal function starting at the root.
+      _remove(key, root);
+
+      num_keys--;
+
+      // Handle the case where the tree depth has decreased.
+      _fix_empty_root();
     }
 
   private:
+
+    // Minimum size of node for key removal.
+    const size_t MIN_KEYS_FOR_RM;
 
     // Internal node implementation
     class Node {
@@ -152,7 +160,7 @@ class Btree {
 
       public:
         // Default constructor
-        Node(Btree<T>* _tree, bool _is_leaf, bool _is_root) :
+        Node(Btree<T>* _tree, bool _is_leaf) :
           degree(_tree->degree),
           MAX_KEYS(2*degree - 1),
           MIN_KEYS(degree - 1),
@@ -161,7 +169,6 @@ class Btree {
       {
           // Set internal variables.
           leaf_status = _is_leaf;
-          is_root = _is_root;
 
           // Allocate room for keys
           keys.reserve(MAX_KEYS);
@@ -192,8 +199,13 @@ class Btree {
         // Returns:
         // True if at max capacity. False otherwise.
         bool is_full(){
-          assert(keys.size() <= MAX_KEYS);
-          return keys.size() == MAX_KEYS;
+          assert(get_num_keys() <= MAX_KEYS);
+          return get_num_keys() == MAX_KEYS;
+        }
+
+        // Whether this node is the root node.
+        bool is_root() {
+          return this == (tree->root).get();
         }
 
       private:
@@ -202,9 +214,6 @@ class Btree {
 
         // Whether this node is a leaf node
         bool leaf_status;
-
-        // Whether this node is the root node.
-        bool is_root;
 
         // The keys contained in this node.
         Keys keys;
@@ -260,12 +269,12 @@ class Btree {
           // Make sure the child being split is actually full.
           assert(children.at(c_idx)->is_full());
           // Verify key/child number invariant
-          assert(get_num_keys() == children.size() - 1);
+          assert((get_num_keys() == children.size() - 1) || is_leaf());
 
           // Child being split.
           NodePtr c1 = children.at(c_idx);
           // Allocate new child
-          NodePtr c2(new Node(tree, true, c1->leaf_status));
+          NodePtr c2(new Node(tree, c1->leaf_status));
 
           // Copy relevant keys from c1 to c2.
           // TODO: Reverse this loop.
@@ -274,7 +283,7 @@ class Btree {
             // Can treat this like a leaf since children are getting copied
             c2->_vacant_insert_key_in_node(*it);
           }
-          assert(get_num_keys() == children.size() - 1);
+          assert((get_num_keys() == children.size() - 1) || is_leaf());
 
           // Copy child pointers
           if (!c1->is_leaf()) {
@@ -282,7 +291,7 @@ class Btree {
               c2->children.emplace_back(c1->children.at(i));
             }
           } else {
-            c2->children.resize(degree);
+            c2->children.resize(0);
           }
 
           // Insert midpoint into parent node's keys.
@@ -291,16 +300,18 @@ class Btree {
 
           // Remove all copied keys and children from c1.
           c1->keys.resize(degree - 1);
-          c1->children.resize(degree);
+          if (!c1->is_leaf()) {
+            c1->children.resize(degree);
+          }
 
           // Check if sizes make sense for:
           // parent node
           assert(get_num_keys() == children.size() - 1);
           // child nodes
           assert(c1->get_num_keys() == degree - 1);
-          assert(c1->children.size() == degree);
+          assert((c1->children.size() == degree) || c1->is_leaf());
           assert(c2->get_num_keys() == degree - 1);
-          assert(c2->children.size() == degree);
+          assert((c2->children.size() == degree) || c2->is_leaf());
           // Make sure c1/c2 is in the correct spot on this node's child list.
           assert(c1 == children.at(c_idx));
           assert(c2 == children.at(c_idx + 1));
@@ -315,6 +326,22 @@ class Btree {
     // Number of keys in the tree.
     size_t num_keys;
 
+    // Check if a key exists in a given node. If so, overwrite it and
+    // return true. Otherwise, do nothing and return false.
+    //
+    // Returns:
+    // True if the key exists in the node and is overwritten. False if
+    // the key does not exist in the node.
+    bool _is_duplicate(T key, NodePtr nd) {
+      for (auto it = nd->keys.begin(); it != nd->keys.end(); it++) {
+        if (key == *it) {
+          *it = key;
+          return true;
+        }
+      }
+      return false;
+    }
+
     // Inserts a key into a node which is assumed to be vacant.
     //
     // Returns:
@@ -323,10 +350,13 @@ class Btree {
       // Make sure node is not full
       assert(!nd->is_full());
       // Check the child/key counts make sense
-      assert((nd->is_leaf()) || (nd->keys.size() + 1 == nd->children.size()));
+      assert((nd->is_leaf()) ||
+             (nd->get_num_keys() + 1 == nd->children.size()));
 
-      size_t idx = nd->keys.size(); // Index variable.
-      NodePtr nxt;    // Possible child node to descend into.
+      // Index variable.
+      size_t idx = 0;
+      // Possible child node to descend into.
+      NodePtr nxt;
 
       // If nd is leaf node, just insert the key
       if (nd->is_leaf()) {
@@ -334,11 +364,16 @@ class Btree {
         return;
       }
 
+      // If key is in nd, just replace it and call it a day.
+      if ( _is_duplicate(key, nd)) {
+        return;
+      }
+
       // Determine the correct child node to recursively drop into.
       if (key > nd->keys.back()) {
         idx = nd->keys.size();
-      } else {
-        while ((idx < nd->keys.size()) && (key < nd->keys.at(idx))) {
+      } else if (key >= nd->keys.front()) {
+        while ((idx < nd->keys.size()) && (key > nd->keys.at(idx))) {
           idx++;
         }
       }
@@ -382,7 +417,7 @@ class Btree {
         // Need to drop a level. Check if it's valid before doing so.
         } else if (*it > key) {
           size_t child_number = std::distance(first_it, it);
-          if (local_root->children.at(child_number) == NULL) {
+          if (local_root->is_leaf()) {
             // Nowhere to go, this is as good as it gets.
             return std::make_pair(local_root, 0);
           } else {
@@ -394,7 +429,7 @@ class Btree {
       }
 
       // Drop into the far-right child if it's valid.
-      if (local_root->children.back() == NULL) {
+      if (local_root->is_leaf()) {
         // Nowhere to go, this is as good as it gets.
         return std::make_pair(local_root, 0);
       } else {
@@ -409,16 +444,393 @@ class Btree {
     // Void.
     void _walk(NodePtr nn) {
       // Check the child/key counts make sense
-      assert((nn->is_leaf()) || (nn->keys.size() + 1 == nn->children.size()));
-      for (size_t i = 0; i < nn->keys.size(); i++) {
+      assert((nn->is_leaf()) ||
+             (nn->get_num_keys() + 1 == nn->children.size()));
+      for (size_t i = 0; i < nn->get_num_keys() - 1; i++) {
         if (!nn->is_leaf()) {
           _walk(nn->children.at(i));
         }
+        DEBUG << nn->keys.at(i) << " to " << nn->keys.at(i+1) << "\n";
+        assert(nn->keys.at(i) < nn->keys.at(i+1));
       }
+      DEBUG << nn->keys.back() << "\n";
       if (!nn->is_leaf()) {
-        _walk(nn->children.at(nn->keys.size()));
+        _walk(nn->children.at(nn->get_num_keys()));
       }
     }
+
+    // Removes key k from a node nd with number of keys greater than or
+    // equal to the degree of the btree unless nd is root.
+    //
+    // Returns:
+    // Void.
+    void _rm_key_from_node(T key, NodePtr nd) {
+      // Make sure we meed the minimum size requirement.
+      assert((nd->get_num_keys() >= MIN_KEYS_FOR_RM) || nd->is_root());
+      // Make sure key/node numbers are sane
+      assert((nd->get_num_keys() == nd->children.size() - 1) ||
+             nd->is_leaf());
+
+      for (auto it = nd->keys.begin(); it < nd->keys.end(); it++) {
+        if (*it == key) {
+          nd->keys.erase(it);
+          return;
+        } else if (*it > key) {
+          break;
+        }
+      }
+
+      // Reaching this point means the key was not found. Throw error.
+      throw std::out_of_range ("Unable to find key for removal.");
+    }
+
+    // Merges node nd_z  and key into nd_y and deletes nd_z.
+    // nd_z and nd_y must have degree-1 keys in them exactly.
+    //
+    // Warning: nd_z is a GONER once this is called, so handle
+    // any pointers to it appropriately.
+    //
+    // Returns:
+    // Pointer to the newly merged node.
+    NodePtr _merge_nodes(NodePtr nd_y, T key, NodePtr nd_z) {
+      // Check the size requirements
+      assert(nd_y->get_num_keys() == (degree - 1));
+      assert(nd_z->get_num_keys() == (degree - 1));
+      // Make sure key/node numbers are sane
+      assert((nd_z->get_num_keys() == nd_z->children.size() - 1) ||
+             nd_z->is_leaf());
+      // Make sure key/node numbers are sane
+      assert((nd_y->get_num_keys() == nd_y->children.size() - 1) ||
+             nd_y->is_leaf());
+      // Check ordering will output a sorted block
+      assert(nd_y->keys.back() < key);
+      assert(key < nd_z->keys.front());
+      // Check ordering of keys
+      _check_ordering(nd_y);
+      _check_ordering(nd_z);
+
+      nd_y->keys.emplace_back(key);
+
+      // Loop through all keys in nd_z and append them to nd_y
+      for (auto it = nd_z->keys.begin(); it < nd_z->keys.end(); it++) {
+        nd_y->keys.emplace_back(*it);
+      }
+
+      // Loop through all children in nd_z and append them to nd_y
+      for (auto it = nd_z->children.begin(); it < nd_z->children.end(); it++) {
+        nd_y->children.emplace_back(*it);
+      }
+
+      // Destroy nd_z
+      nd_z.reset();
+
+      // Check ordering of keys
+      _check_ordering(nd_y);
+
+      return nd_y;
+    }
+
+    // Finds the predecessor key k_pr to the key k in the subtree rooted at nd.
+    // k must belong to the parent of nd whose keys are all greater than the
+    // keys in nd.
+    //
+    // Returns:
+    // The key k_pr
+    T _get_predecessor(T k, NodePtr nd) {
+      if (nd->is_leaf()) {
+        return nd->keys.back();
+      } else {
+        return _get_predecessor(k, nd->children.back());
+      }
+    }
+
+    // Finds the successor key k_s to the key k in the subtree rooted at nd.
+    // k must belong to the parent of nd whose keys are all less than the keys
+    // in nd.
+    //
+    // Returns:
+    // The key k_s
+    T _get_successor(T k, NodePtr nd) {
+      if (nd->is_leaf()) {
+        return nd->keys.front();
+      } else {
+        return _get_successor(k, nd->children.front());
+      }
+    }
+
+    // Removes key k at index idx from internal node nd.
+    //
+    // Example tree:
+    //
+    //      key
+    //    /     \
+    //   Y       Z
+    //
+    // Returns:
+    // Void.
+    void _rm_key_from_internal_node(T key, size_t idx, NodePtr nd) {
+      // Make sure we meed the minimum size requirement.
+      assert((nd->get_num_keys() >= MIN_KEYS_FOR_RM) || nd->is_root());
+      // Make sure this is not a leaf
+      assert(!nd->is_leaf());
+      // Make sure the element exists
+      assert(idx <= nd->get_num_keys() - 1);
+      // Make sure key/node numbers are sane
+      assert(nd->get_num_keys() == nd->children.size() - 1);
+      // Check ordering of keys
+      _check_ordering(nd);
+
+      NodePtr nd_y = nd->children.at(idx);
+      NodePtr nd_z = nd->children.at(idx+1);
+
+      // Case 1
+      // If the child (y) that precedes k in nd has keys >= degree of the btree,
+      // find the predecessor key and replace k with that key.
+      if (nd_y->get_num_keys() >= degree) {
+        assert(nd->keys.at(idx) > nd_y->keys.back());
+        nd->keys.at(idx) = _get_predecessor(nd->keys.at(idx), nd_y);
+        _check_ordering(nd_y);
+        return _remove(nd->keys.at(idx), nd_y);
+      // Case 2
+      // If y has fewer keys than the degree, examine z. If z has number of
+      // keys >= degree, then find the successor key in z and replace k with
+      // that key.
+      } else if ((nd_y->get_num_keys() < degree) &&
+                 (nd_z->get_num_keys() >= degree)) {
+        assert(nd->keys.at(idx) < nd_z->keys.front());
+        nd->keys.at(idx) = _get_successor(nd->keys.at(idx), nd_z);
+        _check_ordering(nd_z);
+        return _remove(nd->keys.at(idx), nd_z);
+      // Case 3
+      // Otherwise, if both y and z have exactly MIN_KEYS keys, merge k and all
+      // keys in z into y. Delete node z and delete k from y.
+      } else {
+        assert(nd_y->keys.back() < nd->keys.at(idx));
+        assert(nd->keys.at(idx) < nd_z->keys.front());
+        T tmp = nd->keys.at(idx);
+        // Don't want to lose the new root, so handle erasing a 1 key root
+        if ((nd->is_root()) && (nd->get_num_keys() == 1)) {
+          root = nd_y;
+        }
+        nd->keys.erase(nd->keys.begin() + idx);
+        nd->children.erase(nd->children.begin() + idx + 1);
+        nd_y = _merge_nodes(nd_y, tmp, nd_z);
+        // Make sure the root didn't just become empty.
+        _fix_empty_root();
+        _check_ordering(nd_y);
+        return _remove(key, nd_y);
+      }
+    }
+
+    // Remove the key from a an internal root node that DOES NOT contain the
+    // key. idx is the index of the child of the node that was passed in that
+    // we will continue the search on.
+    //
+    // Returns:
+    // Void.
+    void _rm_from_internal_node_without_key(T key, size_t idx, NodePtr nd) {
+      // Make sure this isn't a leaf
+      assert(!nd->is_leaf());
+      // Make sure that the index is within the range of children.
+      assert(idx < nd->children.size());
+      // Make sure we meet the node removal requirement.
+      assert((nd->get_num_keys() >= MIN_KEYS_FOR_RM) || nd->is_root());
+      // Make sure key/node numbers are sane
+      assert(nd->get_num_keys() == nd->children.size() - 1);
+      // Check ordering of keys
+      _check_ordering(nd);
+
+      // Pointer to the child node that roots the key we want to remove.
+      NodePtr cn = nd->children.at(idx);
+      // Pointer to the left sibling of cn.
+      NodePtr lsibling;
+      // Pointer to the right sibling of cn.
+      NodePtr rsibling;
+      // Pointer to the sibling which will be borrowed from.
+      NodePtr borrow_target;
+
+      // Determine the values for the siblings. Make them NULL if non-existant.
+      lsibling = (idx == 0) ? NULL : nd->children.at(idx - 1);
+      rsibling =
+        (idx == nd->children.size() - 1) ? NULL : nd->children.at(idx + 1);
+
+      // This would be a nice place to check whether siblings match leaf status
+      if ((lsibling != NULL) && (rsibling != NULL)) {
+        assert(lsibling->is_leaf() == rsibling->is_leaf());
+      }
+
+      // If there are more than degree-1 keys, we can just descend into it.
+      if (cn->get_num_keys() > (degree - 1)) {
+        _check_ordering(cn);
+        return _remove(key, cn);
+      }
+
+      // If cn has an immediate sibling with at least degree keys, give cn
+      // an extra key by moving a key from nd down into cn and moving a key from
+      // cn's sibling up into nd. The child pointer to the right of the key from
+      // nd will be moved into cn by appending it to the child list.
+
+      // Determine who to borrow from. If we can't borrow from anyone, assign
+      // NULL and handle that case.
+      T tmp_key;
+      NodePtr tmp_child;
+      if ((lsibling != NULL) && (lsibling->get_num_keys() >= degree)) {
+        tmp_key = nd->keys.at(idx - 1);
+        if (!lsibling->is_leaf()) {
+          tmp_child = lsibling->children.back();
+        }
+        // Replace key in nd with one from lsibling
+        nd->keys.at(idx - 1) = lsibling->keys.back();
+        // Add the child ptr from lsibling and key from nd to cn.
+        cn->keys.emplace(cn->keys.begin(),tmp_key);
+        if (!lsibling->is_leaf()) {
+          cn->children.emplace(cn->children.begin(), tmp_child);
+        }
+        // Remove last child and key from lsibling.
+        lsibling->keys.erase(lsibling->keys.end() - 1);
+        if (!lsibling->is_leaf()) {
+          lsibling->children.erase(lsibling->children.end() - 1);
+        }
+        _check_ordering(cn);
+        return _remove(key, cn);
+      } else if ((rsibling != NULL) && (rsibling->get_num_keys() >= degree)) {
+        tmp_key = nd->keys.at(idx);
+        if (!rsibling->is_leaf()) {
+        tmp_child = rsibling->children.front();
+        }
+        // Replace key in nd with one from rsibling
+        nd->keys.at(idx) = rsibling->keys.front();
+        // Add the child ptr from rsibling and key fron nd to cn.
+        cn->keys.emplace_back(tmp_key);
+        if (!rsibling->is_leaf()) {
+          cn->children.emplace_back(tmp_child);
+        }
+        // Remove first child and first key from rsibling.
+        rsibling->keys.erase(rsibling->keys.begin());
+        if (!rsibling->is_leaf()) {
+          rsibling->children.erase(rsibling->children.begin());
+        }
+        _check_ordering(cn);
+        return _remove(key, cn);
+      }
+
+      // If we've made it this far, no siblings had at least degree keys.
+      // In the case where a key is not present in an internal node and
+      // the child node that roots the subtree that may contain the key
+      // has only degree-1 keys, we must guarantee that we descent into
+      // a node containing at least degree keys.
+      //
+      // This section merges the child node cn with a sibling and moves
+      // a key down from nd to become the median key for the newly merged node.
+      // We then recursively drop down into the new node to remove the key.
+      T tmp;
+      if (lsibling != NULL) {
+        tmp = nd->keys.at(idx - 1);
+        nd->children.erase(nd->children.begin() + idx);
+        nd->keys.erase(nd->keys.begin() + idx - 1);
+        _merge_nodes(lsibling, tmp, cn);
+        // Make sure the root didn't just become empty.
+        _fix_empty_root();
+        _check_ordering(lsibling);
+        return _remove(key, lsibling);
+      } else {
+        tmp = nd->keys.at(idx);
+        nd->children.erase(nd->children.begin() + idx + 1);
+        nd->keys.erase(nd->keys.begin() + idx);
+        _merge_nodes(cn, tmp, rsibling);
+        // Make sure the root didn't just become empty.
+        _fix_empty_root();
+        _check_ordering(cn);
+        return _remove(key, cn);
+      }
+    }
+
+    // Fixes empty root if it exists
+    //
+    // Returns:
+    // Void
+    void _fix_empty_root() {
+        assert((root->get_num_keys() == root->children.size() - 1) ||
+               (root->is_leaf()));
+        if ((root->get_num_keys() == 0) && (!root->is_leaf())) {
+          root = root->children.at(0);
+        }
+    }
+
+    // Internal key removal function. Removes k from the subtree rooted
+    // under node nd. If the key is not found in the tree, an exception
+    // is thrown identical to search().
+    //
+    // Returns:
+    // Void.
+    void _remove(T key, NodePtr nd) {
+      // Make sure we meed the minimum size requirement.
+      assert((nd->get_num_keys() >= MIN_KEYS_PER_NODE) || nd->is_root());
+      // Make sure key/node numbers are sane
+      assert((nd->get_num_keys() == nd->children.size() - 1) ||
+             nd->is_leaf());
+
+      // Index placeholder.
+      size_t idx = 0;
+      // The correct root node for this key.
+      NodePtr home_nd;
+
+      // Determine the node to recursively drop into.
+      if (key > nd->keys.back()) {
+        idx = nd->get_num_keys();
+        // Unable to find the key!
+        if (nd->is_leaf()) {
+          throw std::out_of_range ("Unable to find key for removal.");
+        } else {
+          home_nd = nd->children.at(idx);
+        }
+      } else if (key >= nd->keys.front()) {
+        while ((idx < nd->get_num_keys()) && (key > nd->keys.at(idx))) {
+          idx++;
+        }
+        if (idx < nd->keys.size()) {
+          home_nd = (nd->keys.at(idx) == key) ? nd : nd->children.at(idx);
+        } else {
+          home_nd = nd->children.at(idx);
+        }
+      }
+
+      // Verify ordering assertions
+      _check_ordering(nd);
+
+      // Is leaf that contains the key. If the leaf doesn't contain the key,
+      // throw an error.
+      if (nd->is_leaf()) {
+        if (home_nd != nd) {
+          throw std::out_of_range ("Unable to find key for removal.");
+        }
+        return _rm_key_from_node(key, nd);
+        assert(nd->is_root() || (nd->get_num_keys() >= MIN_KEYS_PER_NODE));
+      // Is an internal node that contains the key.
+      } else if ((nd == home_nd) && (!nd->is_leaf())) {
+      _check_ordering(home_nd);
+        return _rm_key_from_internal_node(key, idx, home_nd);
+      // Is an internal node that does not contain the key
+      } else if (home_nd != nd) {
+      _check_ordering(nd->children.at(idx));
+        return _rm_from_internal_node_without_key(key, idx, nd);
+      }
+
+      // If we've made it this far there was a logic error.
+      assert(false);
+    }
+
+    // Checks the ordering of keys for node nd via assertions.
+    //
+    // Returns:
+    // Void.
+    void _check_ordering(NodePtr nd) {
+      assert(nd->is_leaf() ||
+        (nd->keys.front() > nd->children.front()->keys.back()));
+      assert(nd->is_leaf() ||
+        (nd->keys.back() < nd->children.back()->keys.front()));
+    }
+
 
 }; // End class Btree
 
