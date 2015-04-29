@@ -217,18 +217,17 @@ class Btree {
           size_t index;
 
           // Place the new key/child such that the order invariant is upheld.
-          for (auto it = keys.begin(); it <= keys.end(); ++it) {
-            // Find where to insert key
-            if ((it == keys.end()) || (*it > key)) {
-              keys.emplace(it, key);
-              index = std::distance(it, keys.end());
-              return index;
-            // Overwrite the key if found.
-            } else if (*it == key) {
-              *it = key;
-              index = std::distance(it, keys.end());
-              return index;
-            }
+          auto it = std::lower_bound(keys.begin(), keys.end(), key);
+          // Find where to insert key
+          if ((it == keys.end()) || (*it > key)) {
+            keys.emplace(it, key);
+            index = std::distance(it, keys.end());
+            return index;
+          // Overwrite the key if found.
+          } else if (*it == key) {
+            *it = key;
+            index = std::distance(it, keys.end());
+            return index;
           }
 
           // Should never make it to this point.
@@ -453,13 +452,10 @@ class Btree {
       assert((nd->get_num_keys() == nd->children.size() - 1) ||
              nd->is_leaf());
 
-      for (auto it = nd->keys.begin(); it < nd->keys.end(); it++) {
-        if (*it == key) {
-          nd->keys.erase(it);
-          return;
-        } else if (*it > key) {
-          break;
-        }
+      auto it = std::lower_bound(nd->keys.begin(), nd->keys.end(), key);
+      if (*it == key) {
+        nd->keys.erase(it);
+        return;
       }
 
       // Reaching this point means the key was not found. Throw error.
