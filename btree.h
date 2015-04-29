@@ -386,36 +386,29 @@ class Btree {
     // A pointer to a node that would make a good insertion point.
     std::pair<NodePtr, size_t> _find_home_node(T key, NodePtr local_root) {
       // Key iterator shortcuts
-      auto it = local_root->keys.begin();
-      auto first_it = it;
+      auto first_it = local_root->keys.begin();
       auto last_it = local_root->keys.end();
 
       // Cycle through all the keys here.
-      while (it != last_it) {
-        // Found the key.
-        if (*it == key) {
-          return std::make_pair(local_root, std::distance(first_it, it));
-        // Need to drop a level. Check if it's valid before doing so.
-        } else if (*it > key) {
-          size_t child_number = std::distance(first_it, it);
-          if (local_root->is_leaf()) {
-            // Nowhere to go, this is as good as it gets.
-            return std::make_pair(local_root, 0);
-          } else {
-            // Dig deeper in the tree.
-            return _find_home_node(key, local_root->children.at(child_number));
-          }
+      auto it = std::lower_bound(first_it, last_it, key);
+      // Need to drop a level. Check if it's valid before doing so.
+      if (*it > key) {
+        size_t child_number = std::distance(first_it, it);
+        if (local_root->is_leaf()) {
+          // Nowhere to go, this is as good as it gets.
+          return std::make_pair(local_root, 0);
+        } else {
+          return _find_home_node(key, local_root->children.at(child_number));
         }
-        it++;
-      }
-
-      // Drop into the far-right child if it's valid.
-      if (local_root->is_leaf()) {
-        // Nowhere to go, this is as good as it gets.
-        return std::make_pair(local_root, 0);
-      } else {
+      // Found the key.
+      } else if (*it == key) {
+        return std::make_pair(local_root, std::distance(first_it, it));
+      } else if (it == last_it) {
         return _find_home_node(key, local_root->children.back());
       }
+
+      // Should never make it here.
+      throw std::out_of_range ("Unable to find key.");
     }
 
 
