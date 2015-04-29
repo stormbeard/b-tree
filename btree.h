@@ -4,6 +4,8 @@
  * Author: Tony Allen (cyril0allen@gmail.com)
  *
  * Purpose: B-tree header/implementation.
+ *
+ * TODO: Use std::lower_bound to find items in sorted vectors.
  **=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/
 #ifndef BTREE_H_
 #define BTREE_H_
@@ -47,28 +49,9 @@ class Btree {
 
       // Create a node that is a leaf and assign to root.
       root.reset(new Node(this, true));
-
-      // TODO: write to disk?
     }
 
-    ~Btree() {
-      //TODO: free up all nodes allocated.
-      //assert(false);
-    }
-
-    // Checks if the tree is obeying B-tree invariants:
-    // -- All leaves are at same level.
-    // -- Every node (except root) contains at least m-1 keys.
-    // -- Every node contains at most 2m-1 keys.
-    // -- All nodes have c+1 children, where c is number of keys contained.
-    // -- All keys in the node are sorted in increasing order.
-    //
-    // Returns:
-    // True if balanced. False otherwise.
-    bool is_sane() {
-      // TODO
-      assert(false);
-    }
+    ~Btree() { }
 
     // Number of keys contained in the tree.
     //
@@ -277,7 +260,6 @@ class Btree {
           NodePtr c2(new Node(tree, c1->leaf_status));
 
           // Copy relevant keys from c1 to c2.
-          // TODO: Reverse this loop.
           for (auto it = c1->keys.begin() + degree;
               it != c1->keys.end(); ++it) {
             // Can treat this like a leaf since children are getting copied
@@ -583,7 +565,6 @@ class Btree {
       NodePtr nd_y = nd->children.at(idx);
       NodePtr nd_z = nd->children.at(idx+1);
 
-      // Case 1
       // If the child (y) that precedes k in nd has keys >= degree of the btree,
       // find the predecessor key and replace k with that key.
       if (nd_y->get_num_keys() >= degree) {
@@ -591,7 +572,6 @@ class Btree {
         nd->keys.at(idx) = _get_predecessor(nd->keys.at(idx), nd_y);
         _check_ordering(nd_y);
         return _remove(nd->keys.at(idx), nd_y);
-      // Case 2
       // If y has fewer keys than the degree, examine z. If z has number of
       // keys >= degree, then find the successor key in z and replace k with
       // that key.
@@ -601,7 +581,6 @@ class Btree {
         nd->keys.at(idx) = _get_successor(nd->keys.at(idx), nd_z);
         _check_ordering(nd_z);
         return _remove(nd->keys.at(idx), nd_z);
-      // Case 3
       // Otherwise, if both y and z have exactly MIN_KEYS keys, merge k and all
       // keys in z into y. Delete node z and delete k from y.
       } else {
