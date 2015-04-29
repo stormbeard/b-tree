@@ -262,7 +262,7 @@ class Btree {
           for (auto it = c1->keys.begin() + degree;
               it != c1->keys.end(); ++it) {
             // Can treat this like a leaf since children are getting copied
-            c2->_vacant_insert_key_in_node(*it);
+            c2->keys.emplace_back(*it);
           }
           assert((get_num_keys() == children.size() - 1) || is_leaf());
 
