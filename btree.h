@@ -26,16 +26,16 @@ class Btree {
   typedef std::shared_ptr<Node> NodePtr;
 
   // Minimum degree of the tree.
-  const size_t degree;
+  const uint32 degree;
   // Applies to all nodes.
-  const size_t MAX_KEYS_PER_NODE;
+  const uint32 MAX_KEYS_PER_NODE;
   // Applies to all nodes except root node.
-  const size_t MIN_KEYS_PER_NODE;
+  const uint32 MIN_KEYS_PER_NODE;
 
   public:
 
     // Default constructor
-    Btree(const size_t _min_degree) :
+    Btree(const uint32 _min_degree) :
       degree(_min_degree),
       MAX_KEYS_PER_NODE(2*degree - 1),
       MIN_KEYS_PER_NODE(degree - 1),
@@ -56,7 +56,7 @@ class Btree {
     //
     // Returns:
     // Number of keys contained in the tree.
-    size_t get_size() {
+    uint32 get_size() {
       return num_keys;
     }
 
@@ -69,7 +69,7 @@ class Btree {
       assert(root != NULL);
 
       // Find a node that may contain the key.
-      std::pair<NodePtr, size_t> results = _find_home_node(key, root);
+      std::pair<NodePtr, uint32> results = _find_home_node(key, root);
       T ret = (results.first->keys.at(results.second));
       if (ret == key){
         return ret;
@@ -123,7 +123,7 @@ class Btree {
   private:
 
     // Minimum size of node for key removal.
-    const size_t MIN_KEYS_FOR_RM;
+    const uint32 MIN_KEYS_FOR_RM;
 
     // Internal node implementation
     class Node {
@@ -134,11 +134,11 @@ class Btree {
       typedef std::vector<NodePtr> ChildNodes;
 
       // Minimum degree of this node.
-      const size_t degree;
+      const uint32 degree;
       // Max/min values for the node.
-      const size_t MAX_KEYS;
-      const size_t MIN_KEYS;
-      const size_t MAX_CHILDREN;
+      const uint32 MAX_KEYS;
+      const uint32 MIN_KEYS;
+      const uint32 MAX_CHILDREN;
 
       public:
         // Default constructor
@@ -163,7 +163,7 @@ class Btree {
         //
         // Returns:
         // Number of keys in this node.
-        size_t get_num_keys(){
+        uint32 get_num_keys(){
           assert(keys.size() <= MAX_KEYS);
           return keys.size();
         }
@@ -208,12 +208,12 @@ class Btree {
         //
         // Returns:
         // The index at which the key was inserted into the node.
-        size_t _vacant_insert_key_in_node(T key) {
+        uint32 _vacant_insert_key_in_node(T key) {
           // Make sure this node isn't full.
           assert(MAX_KEYS > get_num_keys());
 
           // The index at which the key will be placed.
-          size_t index;
+          uint32 index;
 
           // Place the new key/child such that the order invariant is upheld.
           auto it = std::lower_bound(keys.begin(), keys.end(), key);
@@ -242,7 +242,7 @@ class Btree {
         // A std::pair of pointers to the two newly created child nodes. The
         // first node in the pair is the node that was just split and the second
         // is the newly created node.
-        std::pair <NodePtr, NodePtr> _vacant_split_child(size_t c_idx) {
+        std::pair <NodePtr, NodePtr> _vacant_split_child(uint32 c_idx) {
           // Make sure this node isn't full.
           assert(MAX_KEYS > get_num_keys());
           // Check validity of index passed in.
@@ -267,7 +267,7 @@ class Btree {
 
           // Copy child pointers
           if (!c1->is_leaf()) {
-            for (size_t i = degree; i < MAX_CHILDREN; i++) {
+            for (uint32 i = degree; i < MAX_CHILDREN; i++) {
               c2->children.emplace_back(c1->children.at(i));
             }
           } else {
@@ -304,7 +304,7 @@ class Btree {
     NodePtr root;
 
     // Number of keys in the tree.
-    size_t num_keys;
+    uint32 num_keys;
 
     // Check if a key exists in a given node. If so, overwrite it and
     // return true. Otherwise, do nothing and return false.
@@ -334,7 +334,7 @@ class Btree {
              (nd->get_num_keys() + 1 == nd->children.size()));
 
       // Index variable.
-      size_t idx = 0;
+      uint32 idx = 0;
       // Possible child node to descend into.
       NodePtr nxt;
 
@@ -383,7 +383,7 @@ class Btree {
     //
     // Returns:
     // A pointer to a node that would make a good insertion point.
-    std::pair<NodePtr, size_t> _find_home_node(T key, NodePtr local_root) {
+    std::pair<NodePtr, uint32> _find_home_node(T key, NodePtr local_root) {
       // Key iterator shortcuts
       auto first_it = local_root->keys.begin();
       auto last_it = local_root->keys.end();
@@ -392,7 +392,7 @@ class Btree {
       auto it = std::lower_bound(first_it, last_it, key);
       // Need to drop a level. Check if it's valid before doing so.
       if (*it > key) {
-        size_t child_number = std::distance(first_it, it);
+        uint32 child_number = std::distance(first_it, it);
         if (local_root->is_leaf()) {
           // Nowhere to go, this is as good as it gets.
           return std::make_pair(local_root, 0);
@@ -419,7 +419,7 @@ class Btree {
       // Check the child/key counts make sense
       assert((nn->is_leaf()) ||
              (nn->get_num_keys() + 1 == nn->children.size()));
-      for (size_t i = 0; i < nn->get_num_keys() - 1; i++) {
+      for (uint32 i = 0; i < nn->get_num_keys() - 1; i++) {
         if (!nn->is_leaf()) {
           _walk(nn->children.at(i));
         }
@@ -538,7 +538,7 @@ class Btree {
     //
     // Returns:
     // Void.
-    void _rm_key_from_internal_node(T key, size_t idx, NodePtr nd) {
+    void _rm_key_from_internal_node(T key, uint32 idx, NodePtr nd) {
       // Make sure we meed the minimum size requirement.
       assert((nd->get_num_keys() >= MIN_KEYS_FOR_RM) || nd->is_root());
       // Make sure this is not a leaf
@@ -595,7 +595,7 @@ class Btree {
     //
     // Returns:
     // Void.
-    void _rm_from_internal_node_without_key(T key, size_t idx, NodePtr nd) {
+    void _rm_from_internal_node_without_key(T key, uint32 idx, NodePtr nd) {
       // Make sure this isn't a leaf
       assert(!nd->is_leaf());
       // Make sure that the index is within the range of children.
@@ -738,7 +738,7 @@ class Btree {
              nd->is_leaf());
 
       // Index placeholder.
-      size_t idx = 0;
+      uint32 idx = 0;
       // The correct root node for this key.
       NodePtr home_nd;
 
