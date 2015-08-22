@@ -5,7 +5,6 @@
  *
  * Purpose: B-tree header/implementation.
  *
- * TODO: Use std::lower_bound to find items in sorted vectors.
  **=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/
 #ifndef BTREE_H_
 #define BTREE_H_
